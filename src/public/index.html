@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VRC Pixel Grid</title>
+    <style>
+        :root {
+            --bg-color: #282c34; --text-color: #abb2bf; --primary-color: #61afef;
+            --secondary-color: #c678dd; --tertiary-color: #98c379; --error-color: #e06c75;
+            --warn-color: #e5c07b; --border-color: #3b4048; --grid-off: #3e4451;
+            --grid-on: #98c379; --grid-border: #4f5663; --input-bg: #21252b;
+            --container-bg: #2c313a;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 10px; background-color: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; align-items: center; font-size: 14px;}
+        .main-column { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 580px;}
+        .module-container { width: 100%; margin-bottom: 15px; background: var(--container-bg); padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+        h1, h2 { text-align: center; color: var(--primary-color); margin-top: 0; margin-bottom: 15px; font-weight: 300;}
+        h1 {font-size: 1.8em;} h2 {font-size: 1.3em;}
+        .grid-container { display: grid; grid-template-columns: repeat(15, 1fr); width: 270px; height: 270px; margin: 10px auto; border: 1px solid var(--border-color); user-select: none; touch-action: none; background-color: var(--grid-off);}
+        .grid-cell { width: 100%; height: 100%; background-color: var(--grid-off); border: 1px solid var(--grid-border); box-sizing: border-box; }
+        .grid-cell.on { background-color: var(--grid-on); }
+        .controls, .control-group { text-align: center; margin-top: 10px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
+        button, input[type="text"], input[type="number"], select { padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.9em; box-sizing: border-box; background-color: var(--input-bg); color: var(--text-color); }
+        button { background-color: var(--primary-color); color: #fff; border:none; cursor: pointer; transition: background-color 0.2s ease; }
+        button:hover { filter: brightness(1.1); }
+        input[type="text"], input[type="number"], select { width: auto; flex-grow: 1; min-width: 100px; }
+        select { appearance: none; -webkit-appearance: none; background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007CB2%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 10px center; background-size: 10px auto; padding-right: 30px;}
+        .btn-danger { background-color: var(--error-color); }
+        .btn-warning { background-color: var(--warn-color); color: #333; }
+        .status { text-align: center; margin-top: 10px; min-height: 1.2em; font-size:0.9em;}
+        .success { color: var(--tertiary-color); }
+        .error { color: var(--error-color); }
+        label { margin-right: 5px; white-space: nowrap; }
+        .animation-frame-preview-container { display: flex; overflow-x: auto; padding: 5px 0; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); margin-top:10px; background-color: var(--input-bg); scrollbar-width: thin; scrollbar-color: var(--primary-color) var(--input-bg); }
+        .animation-frame-preview { display: grid; grid-template-columns: repeat(15, 1fr); width: 60px; height: 60px; border: 1px solid var(--border-color); margin-right: 8px; flex-shrink: 0; cursor: pointer; background-color: var(--grid-off); }
+        .animation-frame-preview.selected { border: 2px solid var(--primary-color); box-shadow: 0 0 5px var(--primary-color); }
+        .animation-frame-preview .grid-cell { border: 1px solid var(--grid-border); }
+        .frame-nav-buttons button { padding: 5px 8px; font-size: 0.8em; }
+    </style>
+</head>
+<body>
+<div class="main-column">
+    <div class="module-container">
+        <h1>Pixel Grid</h1>
+        <div class="grid-container" id="pixelGrid"></div>
+        <div class="controls">
+            <button id="sendButton">Send to VRC</button>
+            <button id="clearButton" class="btn-danger">Clear Grid & Send</button>
+        </div>
+        <div id="statusMessageDraw" class="status"></div>
+    </div>
+
+    <div class="module-container">
+        <h2>Drawing Presets</h2>
+        <div class="control-group">
+            <label for="presetName">Name:</label>
+            <input type="text" id="presetName" placeholder="Preset Name">
+            <button id="savePresetButton" class="btn-warning">Save Current</button>
+        </div>
+        <div class="control-group">
+            <label for="presetSelect">Load:</label>
+            <select id="presetSelect"><option value="">--Select Preset--</option></select>
+            <button id="loadPresetButton">Load</button>
+        </div>
+        <div id="statusMessagePreset" class="status"></div>
+    </div>
+
+    <div class="module-container">
+        <h2>Scrolling Text</h2>
+        <div class="control-group">
+            <label for="scrollText">Text:</label>
+            <input type="text" id="scrollText" placeholder="Enter text">
+        </div>
+        <div class="control-group">
+            <label for="scrollSpeed">Speed (ms/col):</label>
+            <input type="number" id="scrollSpeed" value="150" min="20" step="10" style="width:80px;">
+        </div>
+        <div class="controls">
+            <button id="startScrollButton">Start Scroll</button>
+            <button id="stopScrollButton" class="btn-danger">Stop Scroll</button>
+        </div>
+        <div id="statusMessageScroll" class="status"></div>
+    </div>
+
+    <div class="module-container">
+        <h2>Animation Mode</h2>
+        <div class="animation-frames-controls frame-nav-buttons">
+            <button id="prevFrameButton">< Prev</button>
+            <span id="currentFrameInfo" style="margin: 0 10px; color: var(--text-color);">Frame 1 / 1</span>
+            <button id="nextFrameButton">Next ></button>
+        </div>
+        <div class="animation-frame-preview-container" id="framePreviewContainer"></div>
+        <div class="controls">
+            <button id="addFrameButton">Add Frame</button>
+            <button id="deleteFrameButton" class="btn-danger">Delete Frame</button>
+            <button id="clearCurrentFrameButton" class="btn-warning">Clear Frame</button>
+        </div>
+        <div class="control-group">
+            <label for="animationDelay">Frame Delay (ms):</label>
+            <input type="number" id="animationDelay" value="200" min="20" step="10" style="width:80px;">
+        </div>
+        <div class="controls">
+            <button id="playAnimationButton">Play Animation</button>
+            <button id="stopAnimationButton" class="btn-danger">Stop Animation</button>
+        </div>
+        <div class="control-group" style="margin-top:15px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+            <label for="animationName">Anim Name:</label>
+            <input type="text" id="animationName" placeholder="Animation Name">
+            <button id="saveAnimationButton" class="btn-warning">Save Anim</button>
+        </div>
+        <div class="control-group">
+            <label for="animationSelect">Load Anim:</label>
+            <select id="animationSelect"><option value="">--Select Anim--</option></select>
+            <button id="loadAnimationButton">Load Anim</button>
+        </div>
+        <div id="statusMessageAnimation" class="status"></div>
+    </div>
+</div>
+
+<script>
+    const GRID_SIZE = 15;
+    const gridContainer = document.getElementById('pixelGrid');
+    const sendButton = document.getElementById('sendButton');
+    const clearButton = document.getElementById('clearButton');
+    const statusMessageDraw = document.getElementById('statusMessageDraw');
+
+    const presetNameInput = document.getElementById('presetName');
+    const savePresetButton = document.getElementById('savePresetButton');
+    const presetSelect = document.getElementById('presetSelect');
+    const loadPresetButton = document.getElementById('loadPresetButton');
+    const statusMessagePreset = document.getElementById('statusMessagePreset');
+
+    const scrollTextInput = document.getElementById('scrollText');
+    const scrollSpeedInput = document.getElementById('scrollSpeed');
+    const startScrollButton = document.getElementById('startScrollButton');
+    const stopScrollButton = document.getElementById('stopScrollButton');
+    const statusMessageScroll = document.getElementById('statusMessageScroll');
+
+    const prevFrameButton = document.getElementById('prevFrameButton');
+    const nextFrameButton = document.getElementById('nextFrameButton');
+    const currentFrameInfo = document.getElementById('currentFrameInfo');
+    const addFrameButton = document.getElementById('addFrameButton');
+    const deleteFrameButton = document.getElementById('deleteFrameButton');
+    const clearCurrentFrameButton = document.getElementById('clearCurrentFrameButton');
+    const framePreviewContainer = document.getElementById('framePreviewContainer');
+    const animationDelayInput = document.getElementById('animationDelay');
+    const playAnimationButton = document.getElementById('playAnimationButton');
+    const stopAnimationButton = document.getElementById('stopAnimationButton');
+    const animationNameInput = document.getElementById('animationName');
+    const saveAnimationButton = document.getElementById('saveAnimationButton');
+    const animationSelect = document.getElementById('animationSelect');
+    const loadAnimationButton = document.getElementById('loadAnimationButton');
+    const statusMessageAnimation = document.getElementById('statusMessageAnimation');
+
+    let currentPixelGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+    let isMouseDown = false;
+    let currentDrawMode = null;
+
+    let animationFrames = [JSON.parse(JSON.stringify(currentPixelGrid))];
+    let currentFrameIndex = 0;
+    let activeAutomation = null;
+
+
+    function deepCopyGrid(grid) {
+        return JSON.parse(JSON.stringify(grid));
+    }
+
+    function renderGrid(gridToRender = currentPixelGrid) {
+        gridContainer.innerHTML = '';
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const cell = document.createElement('div');
+                cell.classList.add('grid-cell');
+                if (gridToRender[y][x]) {
+                    cell.classList.add('on');
+                }
+                cell.dataset.x = x;
+                cell.dataset.y = y;
+                gridContainer.appendChild(cell);
+            }
+        }
+    }
+
+    function stopAllClientAutomations(fromRemote = false){
+        if (activeAutomation === 'scroll' && !fromRemote) stopScrollText(true); // tell server to stop
+        else if (activeAutomation === 'scroll' && fromRemote) stopScrollText(false); // server already knows
+
+        if (activeAutomation === 'animation' && !fromRemote) stopAnimation(true);
+        else if (activeAutomation === 'animation' && fromRemote) stopAnimation(false);
+
+        activeAutomation = null;
+    }
+
+    async function fetchGrid() {
+        try {
+            const response = await fetch('/api/grid');
+            const data = await response.json();
+            if (data.grid) {
+                currentPixelGrid = data.grid;
+                if (activeAutomation !== 'animation' || animationFrames.length === 0) {
+                    animationFrames[currentFrameIndex] = deepCopyGrid(currentPixelGrid);
+                }
+                renderGrid(animationFrames[currentFrameIndex]);
+                updateFramePreviews();
+                updateCurrentFrameInfo();
+            }
+        } catch (error) {
+            console.error('Error fetching grid:', error);
+            displayStatus(statusMessageDraw, 'Error fetching grid state.', true);
+        }
+    }
+
+    async function updateServerGrid() {
+        if (activeAutomation) return;
+        try {
+            const response = await fetch('/api/grid', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newGrid: currentPixelGrid })
+            });
+            const data = await response.json();
+            if (!data.success) {
+                displayStatus(statusMessageDraw, 'Error updating server grid: ' + (data.message || ''), true);
+            }
+        } catch (error) {
+            console.error('Error updating server grid:', error);
+            displayStatus(statusMessageDraw, 'Error updating server grid.', true);
+        }
+    }
+
+    function displayStatus(element, message, isError = false, duration = 3000) {
+        element.textContent = message;
+        element.className = isError ? 'status error' : 'status success';
+        if (message) {
+            setTimeout(() => {
+                if(element.textContent === message) element.textContent = '';
+            }, duration);
+        } else {
+            element.textContent = '';
+        }
+    }
+
+    function handleCellDraw(targetCell) {
+        if (targetCell.classList.contains('grid-cell')) {
+            const x = parseInt(targetCell.dataset.x);
+            const y = parseInt(targetCell.dataset.y);
+
+            if (isMouseDown && currentDrawMode === null) { // First click in a drag sequence
+                currentDrawMode = !animationFrames[currentFrameIndex][y][x];
+            }
+
+            if (isMouseDown) { // Dragging
+                if (animationFrames[currentFrameIndex][y][x] !== currentDrawMode) {
+                    animationFrames[currentFrameIndex][y][x] = currentDrawMode;
+                    targetCell.classList.toggle('on', currentDrawMode);
+                }
+            } else { // Single click
+                animationFrames[currentFrameIndex][y][x] = !animationFrames[currentFrameIndex][y][x];
+                targetCell.classList.toggle('on', animationFrames[currentFrameIndex][y][x]);
+            }
+            currentPixelGrid = deepCopyGrid(animationFrames[currentFrameIndex]);
+            updateFramePreview(currentFrameIndex);
+        }
+    }
+
+
+    gridContainer.addEventListener('pointerdown', (e) => {
+        stopAllClientAutomations();
+        isMouseDown = true;
+        gridContainer.setPointerCapture(e.pointerId);
+        handleCellDraw(e.target);
+        e.preventDefault();
+    });
+
+    gridContainer.addEventListener('pointermove', (e) => {
+        if (isMouseDown) {
+            handleCellDraw(e.target);
+        }
+    });
+
+    document.addEventListener('pointerup', (e) => {
+        if (isMouseDown) {
+            isMouseDown = false;
+            if (gridContainer.hasPointerCapture(e.pointerId)) {
+                gridContainer.releasePointerCapture(e.pointerId);
+            }
+            currentDrawMode = null;
+            updateServerGrid();
+        }
+    });
+
+    gridContainer.addEventListener('contextmenu', e => e.preventDefault());
+
+    sendButton.addEventListener('click', async () => {
+        stopAllClientAutomations(true); // Tell server to stop its automations too
+        currentPixelGrid = deepCopyGrid(animationFrames[currentFrameIndex]);
+        try {
+            await fetch('/api/grid', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newGrid: currentPixelGrid })
+            });
+            const response = await fetch('/api/send', { method: 'POST' });
+            const data = await response.json();
+            displayStatus(statusMessageDraw,data.message || 'Sent to VRChat.');
+        } catch (error) {
+            console.error('Error sending data:', error);
+            displayStatus(statusMessageDraw,'Error sending data.', true);
+        }
+    });
+
+    clearButton.addEventListener('click', async () => {
+        stopAllClientAutomations(true);
+        try {
+            const response = await fetch('/api/clear', { method: 'POST' });
+            const data = await response.json();
+            if (data.grid) {
+                currentPixelGrid = data.grid;
+                animationFrames = [deepCopyGrid(currentPixelGrid)];
+                currentFrameIndex = 0;
+                renderGrid();
+                updateFramePreviews();
+                updateCurrentFrameInfo();
+            }
+            displayStatus(statusMessageDraw, data.message || 'Grid cleared.');
+        } catch (error) {
+            console.error('Error clearing grid:', error);
+            displayStatus(statusMessageDraw, 'Error clearing grid.', true);
+        }
+    });
+
+    savePresetButton.addEventListener('click', async () => {
+        const name = presetNameInput.value.trim();
+        if (!name) {
+            displayStatus(statusMessagePreset, 'Preset name cannot be empty.', true);
+            return;
+        }
+        if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+            displayStatus(statusMessagePreset, 'Preset name invalid characters.', true);
+            return;
+        }
+        try {
+            const gridToSave = deepCopyGrid(animationFrames[currentFrameIndex]);
+            const response = await fetch('/api/presets/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, grid: gridToSave })
+            });
+            const data = await response.json();
+            displayStatus(statusMessagePreset, data.message, !data.success);
+            if(data.success) {
+                fetchPresets();
+                presetNameInput.value = '';
+            }
+        } catch (error) {
+            console.error('Error saving preset:', error);
+            displayStatus(statusMessagePreset, 'Error saving preset.', true);
+        }
+    });
+
+    loadPresetButton.addEventListener('click', async () => {
+        const name = presetSelect.value;
+        if (!name) {
+            displayStatus(statusMessagePreset, 'Please select a preset to load.', true);
+            return;
+        }
+        try {
+            stopAllClientAutomations(true);
+            const response = await fetch(`/api/presets/load/${name}`);
+            const data = await response.json();
+            displayStatus(statusMessagePreset, data.message, !data.success);
+            if (data.success && data.grid) {
+                currentPixelGrid = data.grid;
+                animationFrames[currentFrameIndex] = deepCopyGrid(currentPixelGrid);
+                renderGrid();
+                updateFramePreview(currentFrameIndex);
+            }
+        } catch (error) {
+            console.error('Error loading preset:', error);
+            displayStatus(statusMessagePreset, 'Error loading preset.', true);
+        }
+    });
+
+    async function fetchPresets() {
+        try {
+            const response = await fetch('/api/presets');
+            const data = await response.json();
+            if (data.success && data.presets) {
+                presetSelect.innerHTML = '<option value="">--Select Preset--</option>';
+                data.presets.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    presetSelect.appendChild(option);
+                });
+            } else {
+                displayStatus(statusMessagePreset, data.message || "Could not fetch presets.", true);
+            }
+        } catch (error) {
+            console.error('Error fetching presets:', error);
+            displayStatus(statusMessagePreset, 'Error fetching presets.', true);
+        }
+    }
+
+    startScrollButton.addEventListener('click', async () => {
+        const text = scrollTextInput.value;
+        const speed = parseInt(scrollSpeedInput.value);
+        if (!text) {
+            displayStatus(statusMessageScroll, 'Please enter text to scroll.', true);
+            return;
+        }
+        stopAllClientAutomations(false); // Stop client side only first
+        activeAutomation = 'scroll';
+        try {
+            const response = await fetch('/api/scrolltext/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, speed })
+            });
+            const data = await response.json();
+            displayStatus(statusMessageScroll, data.message, !data.success);
+            if(!data.success) activeAutomation = null;
+        } catch (error) {
+            displayStatus(statusMessageScroll, 'Error starting scroll.', true);
+            activeAutomation = null;
+        }
+    });
+
+    async function stopScrollText(updateServer = true) {
+        const wasActive = activeAutomation === 'scroll';
+        if (activeAutomation === 'scroll') activeAutomation = null;
+
+        if(updateServer && wasActive){ // Only tell server if it was our active mode
+            try {
+                const response = await fetch('/api/scrolltext/stop', { method: 'POST'});
+                const data = await response.json();
+                displayStatus(statusMessageScroll, data.message, !data.success);
+            } catch (error) {
+                displayStatus(statusMessageScroll, 'Error stopping scroll.', true);
+            }
+        } else if (!updateServer && wasActive) { // Client-side stop
+            displayStatus(statusMessageScroll, 'Scroll stopped locally.');
+        }
+        if (wasActive) setTimeout(fetchGrid, 200);
+    }
+    stopScrollButton.addEventListener('click', () => stopScrollText(true));
+
+    function updateCurrentFrameInfo() {
+        currentFrameInfo.textContent = `Frame ${currentFrameIndex + 1} / ${animationFrames.length}`;
+    }
+
+    function renderAnimationFramePreview(frameData, index) {
+        const previewDiv = document.createElement('div');
+        previewDiv.classList.add('animation-frame-preview');
+        if (index === currentFrameIndex) {
+            previewDiv.classList.add('selected');
+        }
+        previewDiv.dataset.frameIndex = index;
+
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const cell = document.createElement('div');
+                cell.classList.add('grid-cell');
+                if (frameData && frameData[y] && frameData[y][x]) {
+                    cell.classList.add('on');
+                }
+                previewDiv.appendChild(cell);
+            }
+        }
+        previewDiv.addEventListener('click', () => {
+            stopAllClientAutomations(true);
+            currentFrameIndex = index;
+            currentPixelGrid = deepCopyGrid(animationFrames[currentFrameIndex]);
+            renderGrid();
+            updateFramePreviews();
+            updateCurrentFrameInfo();
+        });
+        return previewDiv;
+    }
+
+    function updateFramePreviews() {
+        framePreviewContainer.innerHTML = '';
+        animationFrames.forEach((frame, index) => {
+            framePreviewContainer.appendChild(renderAnimationFramePreview(frame, index));
+        });
+        const selectedPreview = framePreviewContainer.querySelector(`.animation-frame-preview[data-frame-index="${currentFrameIndex}"]`);
+        if (selectedPreview) {
+            selectedPreview.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+    }
+
+    function updateFramePreview(indexToUpdate) {
+        const existingPreview = framePreviewContainer.querySelector(`.animation-frame-preview[data-frame-index="${indexToUpdate}"]`);
+        if (existingPreview) {
+            const newPreview = renderAnimationFramePreview(animationFrames[indexToUpdate], indexToUpdate);
+            existingPreview.replaceWith(newPreview);
+        }
+    }
+
+
+    prevFrameButton.addEventListener('click', () => {
+        stopAllClientAutomations(true);
+        if (animationFrames.length === 0) return;
+        currentFrameIndex = (currentFrameIndex - 1 + animationFrames.length) % animationFrames.length;
+        currentPixelGrid = deepCopyGrid(animationFrames[currentFrameIndex]);
+        renderGrid();
+        updateFramePreviews();
+        updateCurrentFrameInfo();
+    });
+
+    nextFrameButton.addEventListener('click', () => {
+        stopAllClientAutomations(true);
+        if (animationFrames.length === 0) return;
+        currentFrameIndex = (currentFrameIndex + 1) % animationFrames.length;
+        currentPixelGrid = deepCopyGrid(animationFrames[currentFrameIndex]);
+        renderGrid();
+        updateFramePreviews();
+        updateCurrentFrameInfo();
+    });
+
+    addFrameButton.addEventListener('click', () => {
+        stopAllClientAutomations(true);
+        const newFrame = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+        animationFrames.splice(currentFrameIndex + 1, 0, newFrame);
+        currentFrameIndex++;
+        currentPixelGrid = deepCopyGrid(animationFrames[currentFrameIndex]);
+        renderGrid();
+        updateFramePreviews();
+        updateCurrentFrameInfo();
+    });
+
+    deleteFrameButton.addEventListener('click', () => {
+        stopAllClientAutomations(true);
+        if (animationFrames.length <= 1) {
+            displayStatus(statusMessageAnimation, "Cannot delete the last frame.", true);
+            return;
+        }
+        animationFrames.splice(currentFrameIndex, 1);
+        if (currentFrameIndex >= animationFrames.length) {
+            currentFrameIndex = animationFrames.length - 1;
+        }
+        currentPixelGrid = deepCopyGrid(animationFrames[currentFrameIndex]);
+        renderGrid();
+        updateFramePreviews();
+        updateCurrentFrameInfo();
+    });
+
+    clearCurrentFrameButton.addEventListener('click', () => {
+        stopAllClientAutomations(true);
+        if(animationFrames[currentFrameIndex]){
+            animationFrames[currentFrameIndex] = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+            currentPixelGrid = deepCopyGrid(animationFrames[currentFrameIndex]);
+            renderGrid();
+            updateFramePreview(currentFrameIndex);
+            displayStatus(statusMessageAnimation, `Frame ${currentFrameIndex + 1} cleared.`);
+        }
+    });
+
+    playAnimationButton.addEventListener('click', async () => {
+        if (animationFrames.length === 0) {
+            displayStatus(statusMessageAnimation, "No frames to play.", true);
+            return;
+        }
+        const delay = parseInt(animationDelayInput.value);
+        if (isNaN(delay) || delay < 20) {
+            displayStatus(statusMessageAnimation, "Invalid animation delay.", true);
+            return;
+        }
+        stopAllClientAutomations(false);
+        activeAutomation = 'animation';
+        try {
+            const response = await fetch(`/api/animations/play`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ frames: animationFrames, delay: delay })
+            });
+            const data = await response.json();
+            displayStatus(statusMessageAnimation, data.message, !data.success);
+            if(!data.success) activeAutomation = null;
+
+        } catch (error) {
+            displayStatus(statusMessageAnimation, "Error playing animation.", true);
+            activeAutomation = null;
+        }
+    });
+
+    async function stopAnimation(updateServer = true) {
+        const wasActive = activeAutomation === 'animation';
+        if(activeAutomation === 'animation') activeAutomation = null;
+
+        if(updateServer && wasActive){
+            try {
+                const response = await fetch('/api/animations/stop', { method: 'POST'});
+                const data = await response.json();
+                displayStatus(statusMessageAnimation, data.message, !data.success);
+            } catch (error) {
+                displayStatus(statusMessageAnimation, 'Error stopping animation.', true);
+            }
+        } else if (!updateServer && wasActive) {
+            displayStatus(statusMessageAnimation, 'Animation stopped locally.');
+        }
+        if(wasActive) setTimeout(fetchGrid, 200);
+    }
+    stopAnimationButton.addEventListener('click', () => stopAnimation(true));
+
+    saveAnimationButton.addEventListener('click', async () => {
+        const name = animationNameInput.value.trim();
+        const delay = parseInt(animationDelayInput.value);
+        if (!name) {
+            displayStatus(statusMessageAnimation, 'Animation name cannot be empty.', true);
+            return;
+        }
+        if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+            displayStatus(statusMessageAnimation, 'Animation name invalid characters.', true);
+            return;
+        }
+        if (animationFrames.length === 0) {
+            displayStatus(statusMessageAnimation, 'No frames to save.', true);
+            return;
+        }
+        if (isNaN(delay) || delay < 20) {
+            displayStatus(statusMessageAnimation, "Invalid animation delay for saving.", true);
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/animations/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, frames: animationFrames, delay })
+            });
+            const data = await response.json();
+            displayStatus(statusMessageAnimation, data.message, !data.success);
+            if (data.success) {
+                fetchAnimations();
+                animationNameInput.value = '';
+            }
+        } catch (error) {
+            displayStatus(statusMessageAnimation, 'Error saving animation.', true);
+        }
+    });
+
+    loadAnimationButton.addEventListener('click', async () => {
+        const name = animationSelect.value;
+        if (!name) {
+            displayStatus(statusMessageAnimation, 'Please select an animation to load.', true);
+            return;
+        }
+        stopAllClientAutomations(false);
+        activeAutomation = 'animation';
+        try {
+            const response = await fetch(`/api/animations/load/${name}`);
+            const data = await response.json();
+            displayStatus(statusMessageAnimation, data.message, !data.success);
+            if (data.success && data.animation) {
+                animationFrames = data.animation.frames;
+                animationDelayInput.value = data.animation.delay;
+                currentFrameIndex = 0;
+                if (animationFrames.length > 0) {
+                    currentPixelGrid = deepCopyGrid(animationFrames[0]);
+                    renderGrid();
+                } else {
+                    currentPixelGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+                    animationFrames = [deepCopyGrid(currentPixelGrid)];
+                    renderGrid();
+                }
+                updateFramePreviews();
+                updateCurrentFrameInfo();
+            } else {
+                activeAutomation = null;
+            }
+        } catch (error) {
+            displayStatus(statusMessageAnimation, 'Error loading animation.', true);
+            activeAutomation = null;
+        }
+    });
+
+    async function fetchAnimations() {
+        try {
+            const response = await fetch('/api/animations');
+            const data = await response.json();
+            if (data.success && data.animations) {
+                animationSelect.innerHTML = '<option value="">--Select Anim--</option>';
+                data.animations.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    animationSelect.appendChild(option);
+                });
+            } else {
+                displayStatus(statusMessageAnimation, data.message || "Could not fetch animations.", true);
+            }
+        } catch (error) {
+            displayStatus(statusMessageAnimation, 'Error fetching animations.', true);
+        }
+    }
+
+
+    fetchGrid();
+    fetchPresets();
+    fetchAnimations();
+    updateCurrentFrameInfo();
+    updateFramePreviews();
+</script>
+</body>
+</html>
