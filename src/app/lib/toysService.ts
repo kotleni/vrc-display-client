@@ -461,11 +461,161 @@ class FoodChasingSnakeToy implements SandboxToy {
     }
 }
 
+class SpinningCubeToy implements SandboxToy {
+    id: string = "spinning-cube-3d-optimized";
+    name: string = "3D Spinning Cube (Optimized Draw)";
+    updateDelay: number = 100;
+
+    private isRunning: boolean = false;
+    private readonly displayWidth: number = 15;
+    private readonly displayHeight: number = 15;
+
+    private vertices: { x: number, y: number, z: number }[] = [
+        { x: -1, y: -1, z: -1 }, { x: 1, y: -1, z: -1 },
+        { x: 1, y: 1, z: -1 }, { x: -1, y: 1, z: -1 },
+        { x: -1, y: -1, z: 1 }, { x: 1, y: -1, z: 1 },
+        { x: 1, y: 1, z: 1 }, { x: -1, y: 1, z: 1 }
+    ];
+
+    private edges: [number, number][] = [
+        [0, 1], [1, 2], [2, 3], [3, 0],
+        [4, 5], [5, 6], [6, 7], [7, 4],
+        [0, 4], [1, 5], [2, 6], [3, 7]
+    ];
+
+    private angleX: number = 0;
+    private angleY: number = 0;
+    private angleZ: number = 0;
+
+    private readonly rotationSpeedX: number = 0.03;
+    private readonly rotationSpeedY: number = 0.04;
+    private readonly rotationSpeedZ: number = 0.02;
+
+    private readonly projectionScale: number = 4.5;
+    private readonly screenCenterX: number = Math.floor(this.displayWidth / 2);
+    private readonly screenCenterY: number = Math.floor(this.displayHeight / 2);
+
+    private lastFrameLitPixels: Array<[number, number]> = [];
+    private currentFrameLitPixels: Array<[number, number]> = [];
+
+    async onStart(): Promise<void> {
+        this.isRunning = true;
+        this.angleX = 0;
+        this.angleY = 0;
+        this.angleZ = 0;
+        this.lastFrameLitPixels = [];
+        this.currentFrameLitPixels = [];
+        await globalRenderer.clear();
+        // Initial draw if needed, or let onUpdate handle the first frame
+        await this.updateCubeStateAndDraw();
+    }
+
+    async onStop(): Promise<void> {
+        this.isRunning = false;
+    }
+
+    private async drawLine(x1: number, y1: number, x2: number, y2: number): Promise<void> {
+        const rX1 = Math.round(x1);
+        const rY1 = Math.round(y1);
+        const rX2 = Math.round(x2);
+        const rY2 = Math.round(y2);
+
+        let dx = Math.abs(rX2 - rX1);
+        let dy = Math.abs(rY2 - rY1);
+        let sx = (rX1 < rX2) ? 1 : -1;
+        let sy = (rY1 < rY2) ? 1 : -1;
+        let err = dx - dy;
+
+        let currentX = rX1;
+        let currentY = rY1;
+
+        let iterations = 0;
+        const maxIterations = this.displayWidth + this.displayHeight;
+
+        while (true) {
+            if (currentX >= 0 && currentX < this.displayWidth && currentY >= 0 && currentY < this.displayHeight) {
+                await globalRenderer.setPixel(currentX, currentY, true);
+                this.currentFrameLitPixels.push([currentX, currentY]);
+            }
+
+            if (currentX === rX2 && currentY === rY2) break;
+
+            let e2 = 2 * err;
+            if (e2 > -dy) {
+                err -= dy;
+                currentX += sx;
+            }
+            if (e2 < dx) {
+                err += dx;
+                currentY += sy;
+            }
+            iterations++;
+            if (iterations > maxIterations) break;
+        }
+    }
+
+    private async updateCubeStateAndDraw(): Promise<void> {
+        // Clear previously lit pixels from the last frame
+        for (const pixel of this.lastFrameLitPixels) {
+            await globalRenderer.setPixel(pixel[0], pixel[1], false);
+        }
+        this.currentFrameLitPixels = []; // Reset for the new frame
+
+        this.angleX += this.rotationSpeedX;
+        this.angleY += this.rotationSpeedY;
+        this.angleZ += this.rotationSpeedZ;
+
+        const rotatedVertices = this.vertices.map(vertex => {
+            let { x, y, z } = vertex;
+
+            const cosX = Math.cos(this.angleX); const sinX = Math.sin(this.angleX);
+            const y1 = y * cosX - z * sinX; const z1 = y * sinX + z * cosX;
+            y = y1; z = z1;
+
+            const cosY = Math.cos(this.angleY); const sinY = Math.sin(this.angleY);
+            const x1 = x * cosY + z * sinY; const z2 = -x * sinY + z * cosY;
+            x = x1; z = z2;
+
+            const cosZ = Math.cos(this.angleZ); const sinZ = Math.sin(this.angleZ);
+            const x2 = x * cosZ - y * sinZ; const y2 = x * sinZ + y * cosZ;
+            x = x2; y = y2;
+
+            return { x, y, z };
+        });
+
+        const projectedVertices = rotatedVertices.map(vertex => {
+            const x2d = (vertex.x * this.projectionScale) + this.screenCenterX;
+            const y2d = (vertex.y * this.projectionScale) + this.screenCenterY;
+            return { x: x2d, y: y2d };
+        });
+
+        for (const edge of this.edges) {
+            const v1 = projectedVertices[edge[0]];
+            const v2 = projectedVertices[edge[1]];
+            if (v1 && v2) {
+                await this.drawLine(v1.x, v1.y, v2.x, v2.y);
+            }
+        }
+
+        this.lastFrameLitPixels = [...this.currentFrameLitPixels];
+
+        await globalRenderer.render();
+    }
+
+    async onUpdate(): Promise<void> {
+        if (!this.isRunning) {
+            return;
+        }
+        await this.updateCubeStateAndDraw();
+    }
+}
+
 const toys: SandboxToy[] = [
     new FillAndClearToy(),
     new BouncingBallToy(),
     new FallingPixelsToy(),
     new FoodChasingSnakeToy(),
+    new SpinningCubeToy(),
 ];
 
 let activeToy: SandboxToy | null = null;
