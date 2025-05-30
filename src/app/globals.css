@@ -36,3 +36,53 @@ label { margin-right: 5px; white-space: nowrap; }
 .animation-frame-preview.selected { border: 2px solid var(--primary-color); box-shadow: 0 0 5px var(--primary-color); }
 .animation-frame-preview .grid-cell { border: 1px solid var(--grid-border); }
 .frame-nav-buttons button { padding: 5px 8px; font-size: 0.8em; }
+
+/* Styles for PixelGridPreview component */
+.pixel-grid-preview { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    margin: 10px 0; 
+    padding: 10px; 
+    border: 1px solid var(--border-color); 
+    border-radius: 8px; 
+    background-color: var(--container-bg); 
+}
+.pixel-grid-preview h3 { 
+    margin-top: 0; 
+    margin-bottom: 10px; 
+    color: var(--primary-color); 
+    font-size: 1.1em; 
+    font-weight: 300; 
+}
+.preview-grid-container { 
+    display: grid; 
+    grid-template-columns: repeat(15, 1fr); 
+    border: 1px solid var(--border-color); 
+    user-select: none; 
+    background-color: var(--grid-off); 
+}
+.preview-grid-cell { 
+    width: 100%; 
+    height: 100%; 
+    background-color: var(--grid-off); 
+    border: 1px solid var(--grid-border); 
+    box-sizing: border-box; 
+}
+.preview-grid-cell.on { 
+    background-color: var(--grid-on); 
+}
+
+/* Size variants */
+.preview-small .preview-grid-container { 
+    width: 120px; 
+    height: 120px; 
+}
+.preview-medium .preview-grid-container { 
+    width: 180px; 
+    height: 180px; 
+}
+.preview-large .preview-grid-container { 
+    width: 240px; 
+    height: 240px; 
+}

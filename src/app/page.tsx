@@ -5,6 +5,7 @@ import PixelGridCanvas from './components/PixelGridCanvas';
 import DrawingPresetsManager from './components/DrawingPresetsManager';
 import ScrollTextManager from './components/ScrollTextManager';
 import AnimationManager from './components/AnimationManager';
+import PixelGridPreview from './components/PixelGridPreview';
 import { GRID_SIZE } from './lib/font';
 import SandboxesManager from "@/app/components/SandboxesManager";
 
@@ -79,7 +80,7 @@ export default function HomePage() {
       displayStatus(setStatusDraw, data.message || 'Grid cleared.');
     } catch (error) { displayStatus(setStatusDraw, 'Error clearing grid.', true); }
   };
-  
+
   const handleAutomationStart = async (type: 'scroll' | 'animation' | 'sandbox') => {
     if (activeAutomation && activeAutomation !== type) await handleStopAllAutomations(true);
     setActiveAutomation(type);
@@ -123,6 +124,11 @@ export default function HomePage() {
       </div>
 
       {statusDraw && <div className={`status-message ${statusDraw.isError ? 'error' : 'success'}`}>{statusDraw.message}</div>}
+
+      <div className="module-container">
+        <h2>Real-time Display Preview</h2>
+        <PixelGridPreview refreshInterval={1000/20} previewSize="small" />
+      </div>
 
       {(currentMode === 'draw' || currentMode === 'animation') && (
         <div className="module-container">
