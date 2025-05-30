@@ -610,12 +610,425 @@ class SpinningCubeToy implements SandboxToy {
     }
 }
 
+class TetrisAutoplayToy implements SandboxToy {
+    id: string = "tetris-autoplay";
+    name: string = "Tetris Autoplay";
+    updateDelay: number = 100; // ms per game tick (piece movement)
+
+    private isRunning: boolean = false;
+
+    private readonly BOARD_WIDTH = 10;
+    private readonly BOARD_HEIGHT = 15; // Display is 15x15, use full height
+
+    private board: boolean[][] = [];
+
+    private readonly TETROMINOES = {
+        'I': [[[1,1,1,1]], [[1],[1],[1],[1]]],
+        'J': [[[1,0,0],[1,1,1]], [[0,1],[0,1],[1,1]], [[1,1,1],[0,0,1]], [[1,1],[1,0],[1,0]]],
+        'L': [[[0,0,1],[1,1,1]], [[1,0],[1,0],[1,1]], [[1,1,1],[1,0,0]], [[1,1],[0,1],[0,1]]],
+        'O': [[[1,1],[1,1]]],
+        'S': [[[0,1,1],[1,1,0]], [[1,0],[1,1],[0,1]]],
+        'T': [[[0,1,0],[1,1,1]], [[1,0],[1,1],[1,0]], [[1,1,1],[0,1,0]], [[0,1],[1,1],[0,1]]],
+        'Z': [[[1,1,0],[0,1,1]], [[0,1],[1,1],[1,0]]]
+    };
+    private pieceTypes: string[] = [];
+
+    private currentPiece: { shape: number[][], x: number, y: number, type: string, rotationIndex: number } | null = null;
+    private nextPieceType: string | null = null;
+
+    private score: number = 0;
+    private linesClearedTotal: number = 0;
+    private gameOverState: boolean = false;
+
+    private aiTarget: { x: number, rotationIndex: number, score: number } | null = null;
+    private aiActionQueue: string[] = []; // "LEFT", "RIGHT", "ROTATE", "DOWN"
+
+    private gameTickCounter: number = 0;
+    private readonly TICKS_PER_AUTO_DROP = 3; // Piece drops naturally every N ticks if no AI action
+
+    // Display offsets if Tetris board is smaller than display (here, width is smaller)
+    private readonly offsetX = Math.floor((15 - this.BOARD_WIDTH) / 2);
+    private readonly offsetY = 0;
+
+
+    constructor() {
+        this.pieceTypes = Object.keys(this.TETROMINOES);
+    }
+
+    private async drawBoardState(): Promise<void> {
+        for (let y = 0; y < this.BOARD_HEIGHT; y++) {
+            for (let x = 0; x < this.BOARD_WIDTH; x++) {
+                await globalRenderer.setPixel(x + this.offsetX, y + this.offsetY, this.board[y][x]);
+            }
+        }
+    }
+
+    private async drawPiece(piece: {shape: number[][], x: number, y: number}, value: boolean): Promise<void> {
+        for (let r = 0; r < piece.shape.length; r++) {
+            for (let c = 0; c < piece.shape[r].length; c++) {
+                if (piece.shape[r][c]) {
+                    const boardX = piece.x + c;
+                    const boardY = piece.y + r;
+                    if (boardX >= 0 && boardX < this.BOARD_WIDTH && boardY >= 0 && boardY < this.BOARD_HEIGHT) {
+                        await globalRenderer.setPixel(boardX + this.offsetX, boardY + this.offsetY, value);
+                    }
+                }
+            }
+        }
+    }
+
+    private getRandomPieceType(): string {
+        return this.pieceTypes[Math.floor(Math.random() * this.pieceTypes.length)];
+    }
+
+    private spawnNewPiece(): boolean {
+        if (!this.nextPieceType) this.nextPieceType = this.getRandomPieceType();
+
+        const type = this.nextPieceType;
+        const rotations = this.TETROMINOES[type as keyof typeof this.TETROMINOES];
+        const shape = rotations[0];
+        const x = Math.floor(this.BOARD_WIDTH / 2) - Math.floor(shape[0].length / 2);
+        const y = 0;
+
+        this.currentPiece = { shape, x, y, type, rotationIndex: 0 };
+        this.nextPieceType = this.getRandomPieceType();
+        this.gameTickCounter = 0; // Reset game tick counter for new piece
+
+        if (!this.isValidPosition(this.currentPiece.shape, this.currentPiece.x, this.currentPiece.y)) {
+            this.gameOverState = true;
+            return false;
+        }
+        this.aiTarget = null; // Reset AI target for new piece
+        this.aiActionQueue = [];
+        this.findBestMove(); // AI calculates best move for the new piece
+        return true;
+    }
+
+    private isValidPosition(shape: number[][], x: number, y: number): boolean {
+        for (let r = 0; r < shape.length; r++) {
+            for (let c = 0; c < shape[r].length; c++) {
+                if (shape[r][c]) {
+                    const boardX = x + c;
+                    const boardY = y + r;
+                    if (boardX < 0 || boardX >= this.BOARD_WIDTH || boardY >= this.BOARD_HEIGHT) {
+                        return false;
+                    }
+                    if (boardY >= 0 && this.board[boardY][boardX]) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    private lockPiece(): void {
+        if (!this.currentPiece) return;
+        for (let r = 0; r < this.currentPiece.shape.length; r++) {
+            for (let c = 0; c < this.currentPiece.shape[r].length; c++) {
+                if (this.currentPiece.shape[r][c]) {
+                    const boardX = this.currentPiece.x + c;
+                    const boardY = this.currentPiece.y + r;
+                    if (boardY >= 0 && boardY < this.BOARD_HEIGHT && boardX >=0 && boardX < this.BOARD_WIDTH) { // Ensure y is not negative before indexing board
+                        this.board[boardY][boardX] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    private clearLines(): number {
+        let linesCleared = 0;
+        for (let y = this.BOARD_HEIGHT - 1; y >= 0; y--) {
+            if (this.board[y].every(cell => cell)) {
+                linesCleared++;
+                this.board.splice(y, 1);
+                this.board.unshift(new Array(this.BOARD_WIDTH).fill(false));
+                y++; // Re-check the current row index as it's now a new row
+            }
+        }
+        if (linesCleared > 0) {
+            this.score += [0, 100, 300, 500, 800][linesCleared] * (this.linesClearedTotal / 10 + 1); // Basic scoring
+            this.linesClearedTotal += linesCleared;
+        }
+        return linesCleared;
+    }
+
+    private rotateCurrentPiece(): void {
+        if (!this.currentPiece) return;
+        const rotations = this.TETROMINOES[this.currentPiece.type as keyof typeof this.TETROMINOES];
+        const nextRotationIndex = (this.currentPiece.rotationIndex + 1) % rotations.length;
+        const nextShape = rotations[nextRotationIndex];
+
+        // Basic wall kick (very simple, not full SRS)
+        let kickX = 0;
+        if (!this.isValidPosition(nextShape, this.currentPiece.x, this.currentPiece.y)) {
+            if (this.isValidPosition(nextShape, this.currentPiece.x + 1, this.currentPiece.y)) kickX = 1;
+            else if (this.isValidPosition(nextShape, this.currentPiece.x - 1, this.currentPiece.y)) kickX = -1;
+            else if (this.isValidPosition(nextShape, this.currentPiece.x + 2, this.currentPiece.y)) kickX = 2; // For I piece
+            else if (this.isValidPosition(nextShape, this.currentPiece.x - 2, this.currentPiece.y)) kickX = -2; // For I piece
+            else return; // Cannot rotate
+        }
+
+        this.currentPiece.shape = nextShape;
+        this.currentPiece.rotationIndex = nextRotationIndex;
+        this.currentPiece.x += kickX;
+    }
+
+    private moveCurrentPiece(dx: number, dy: number): boolean {
+        if (!this.currentPiece) return false;
+        if (this.isValidPosition(this.currentPiece.shape, this.currentPiece.x + dx, this.currentPiece.y + dy)) {
+            this.currentPiece.x += dx;
+            this.currentPiece.y += dy;
+            return true;
+        }
+        return false;
+    }
+
+    // --- AI Functions ---
+    private simulateDrop(board: boolean[][], piece: {shape: number[][], x: number, y: number}): {landedBoard: boolean[][], landingHeight: number} {
+        let simY = piece.y;
+        while (true) {
+            let canMoveDown = true;
+            for (let r = 0; r < piece.shape.length; r++) {
+                for (let c = 0; c < piece.shape[r].length; c++) {
+                    if (piece.shape[r][c]) {
+                        const boardX = piece.x + c;
+                        const boardY = simY + r + 1; // Check one step below
+                        if (boardY >= this.BOARD_HEIGHT || (boardY >=0 && board[boardY][boardX])) {
+                            canMoveDown = false;
+                            break;
+                        }
+                    }
+                }
+                if(!canMoveDown) break;
+            }
+            if(canMoveDown) simY++; else break;
+        }
+
+        const landedBoard = board.map(row => row.slice());
+        let pieceLandingHeight = 0;
+        for (let r = 0; r < piece.shape.length; r++) {
+            for (let c = 0; c < piece.shape[r].length; c++) {
+                if (piece.shape[r][c]) {
+                    landedBoard[simY + r][piece.x + c] = true;
+                    pieceLandingHeight = Math.max(pieceLandingHeight, simY + r);
+                }
+            }
+        }
+        return { landedBoard, landingHeight: pieceLandingHeight };
+    }
+
+    private evaluateBoard(boardState: boolean[][], landingHeight: number): {score: number, lines: number} {
+        let score = 0;
+        let linesCleared = 0;
+        let tempBoard = boardState.map(row => row.slice());
+
+        for (let y = this.BOARD_HEIGHT - 1; y >= 0; y--) {
+            if (tempBoard[y].every(cell => cell)) {
+                linesCleared++;
+                tempBoard.splice(y, 1);
+                tempBoard.unshift(new Array(this.BOARD_WIDTH).fill(false));
+                y++;
+            }
+        }
+        score += linesCleared * 1000; // High reward for line clears
+
+        let aggregateHeight = 0;
+        let holes = 0;
+        let columnHeights = new Array(this.BOARD_WIDTH).fill(0);
+
+        for (let x = 0; x < this.BOARD_WIDTH; x++) {
+            let columnHole = false;
+            for (let y = 0; y < this.BOARD_HEIGHT; y++) {
+                if (tempBoard[y][x]) {
+                    if (columnHeights[x] === 0) columnHeights[x] = this.BOARD_HEIGHT - y;
+                    if(columnHole) holes++; // Hole if a filled cell is above an empty one we passed
+                } else {
+                    if(columnHeights[x] > 0) columnHole = true; // Potential hole if we see empty after filled
+                }
+            }
+            aggregateHeight += columnHeights[x];
+        }
+
+        score -= aggregateHeight * 10;
+        score -= holes * 50;
+
+        let bumpiness = 0;
+        for (let x = 0; x < this.BOARD_WIDTH - 1; x++) {
+            bumpiness += Math.abs(columnHeights[x] - columnHeights[x+1]);
+        }
+        score -= bumpiness * 5;
+        score -= landingHeight * 1; // Prefer lower placements slightly
+
+        return {score, lines: linesCleared};
+    }
+
+    private findBestMove(): void {
+        if (!this.currentPiece) return;
+        let bestScore = -Infinity;
+        let bestMove: {x: number, rotationIndex: number, score: number} | null = null;
+
+        const originalRotationIndex = this.currentPiece.rotationIndex;
+        const originalX = this.currentPiece.x;
+        const originalY = this.currentPiece.y; // Not used in simulation start, but good for reset
+        const pieceType = this.currentPiece.type;
+        const rotations = this.TETROMINOES[pieceType as keyof typeof this.TETROMINOES];
+
+        for (let rIdx = 0; rIdx < rotations.length; rIdx++) {
+            const shape = rotations[rIdx];
+            for (let x = -shape[0].length + 1; x < this.BOARD_WIDTH; x++) { // Iterate all possible columns
+                const simPiece = { shape, x, y: 0 }; // Start drop from y=0
+
+                // Check if this starting position is even remotely valid (e.g., not immediately colliding with top)
+                // and if it can actually reach column x
+                let canPlaceHorizontally = true;
+                for(let sr=0; sr < shape.length; ++sr){
+                    for(let sc=0; sc < shape[sr].length; ++sc){
+                        if(shape[sr][sc]){
+                            if(x + sc < 0 || x + sc >= this.BOARD_WIDTH || (/* y is 0 */ sr < this.BOARD_HEIGHT && this.board[sr][x+sc])) {
+                                canPlaceHorizontally = false; break;
+                            }
+                        }
+                    }
+                    if(!canPlaceHorizontally) break;
+                }
+                if(!canPlaceHorizontally && !this.isValidPosition(shape, x, 0)) continue;
+
+
+                const { landedBoard, landingHeight } = this.simulateDrop(this.board, simPiece);
+                const evalResult = this.evaluateBoard(landedBoard, landingHeight);
+
+                if (evalResult.score > bestScore) {
+                    bestScore = evalResult.score;
+                    bestMove = { x: simPiece.x, rotationIndex: rIdx, score: bestScore };
+                }
+            }
+        }
+        this.aiTarget = bestMove;
+        this.aiActionQueue = []; // Clear previous queue
+
+        if (this.aiTarget && this.currentPiece) {
+            // Generate action queue
+            const targetRotations = (this.aiTarget.rotationIndex - this.currentPiece.rotationIndex + rotations.length) % rotations.length;
+            for(let i=0; i<targetRotations; ++i) this.aiActionQueue.push("ROTATE");
+
+            let currentSimX = this.currentPiece.x; // Simulate X position after rotations for horizontal moves
+            // (A more advanced AI would consider piece width changing with rotation here)
+
+            if(currentSimX < this.aiTarget.x) {
+                for(let i=0; i < this.aiTarget.x - currentSimX; ++i) this.aiActionQueue.push("RIGHT");
+            } else if (currentSimX > this.aiTarget.x) {
+                for(let i=0; i < currentSimX - this.aiTarget.x; ++i) this.aiActionQueue.push("LEFT");
+            }
+            this.aiActionQueue.push("DROP"); // Signal to start dropping or hard drop
+        }
+    }
+
+    // --- Toy Lifecycle ---
+    async onStart(): Promise<void> {
+        this.isRunning = true;
+        this.gameOverState = false;
+        this.score = 0;
+        this.linesClearedTotal = 0;
+        this.gameTickCounter = 0; // Reset game tick counter
+        this.board = Array.from({ length: this.BOARD_HEIGHT }, () => Array(this.BOARD_WIDTH).fill(false));
+        await globalRenderer.clear();
+        this.spawnNewPiece();
+        await this.drawBoardState(); // Draw empty board
+        if (this.currentPiece) await this.drawPiece(this.currentPiece, true);
+        await globalRenderer.render();
+    }
+
+    async onStop(): Promise<void> {
+        this.isRunning = false;
+    }
+
+    async onUpdate(): Promise<void> {
+        if (!this.isRunning) {
+            return;
+        }
+
+        if (this.gameOverState) {
+            // Restart the game when in game over state
+            await this.onStart();
+            return;
+        }
+
+        if (!this.currentPiece) {
+            if (!this.spawnNewPiece()) { // This sets gameOver if spawn fails
+                return; // Game Over
+            }
+            // Initial draw of new piece handled by spawn or below
+        }
+
+        // Erase current piece from old position
+        if (this.currentPiece) await this.drawPiece(this.currentPiece, false);
+
+        let pieceMovedOrRotated = false;
+
+        if (this.aiActionQueue.length > 0) {
+            const action = this.aiActionQueue.shift()!;
+            switch(action) {
+                case "ROTATE":
+                    this.rotateCurrentPiece();
+                    pieceMovedOrRotated = true;
+                    break;
+                case "LEFT":
+                    this.moveCurrentPiece(-1, 0);
+                    pieceMovedOrRotated = true;
+                    break;
+                case "RIGHT":
+                    this.moveCurrentPiece(1, 0);
+                    pieceMovedOrRotated = true;
+                    break;
+                case "DROP": // This signals AI is done positioning, now drop
+                    // Drop the piece all the way down
+                    let dropped = false;
+                    while(this.moveCurrentPiece(0,1)) {
+                        dropped = true;
+                    }
+                    pieceMovedOrRotated = dropped;
+                    break;
+            }
+        } else { // Natural gravity or if AI queue is empty (should ideally always have DROP)
+            this.gameTickCounter++;
+            if (this.gameTickCounter >= this.TICKS_PER_AUTO_DROP) {
+                if(!this.moveCurrentPiece(0,1)) pieceMovedOrRotated = false;
+                else pieceMovedOrRotated = true;
+                this.gameTickCounter = 0;
+            }
+        }
+
+
+        if (this.currentPiece && !pieceMovedOrRotated && this.aiActionQueue.length === 0) {
+            // Piece couldn't move down (likely collided) and AI is done or wasn't moving it
+            this.lockPiece();
+            const lines = this.clearLines();
+            await this.drawBoardState(); // Redraw whole board after locking piece
+            this.currentPiece = null; // Signal to spawn new piece next tick
+            if (!this.spawnNewPiece()) { //This sets gameOverState if spawn fails
+                await this.drawBoardState(); // Update display one last time for locked piece.
+                if (this.currentPiece) await this.drawPiece(this.currentPiece, true); // Draw the piece that caused game over
+                await globalRenderer.render();
+                return;
+            }
+        }
+
+        // Redraw current piece at new position (or if it's a new piece)
+        if (this.currentPiece) await this.drawPiece(this.currentPiece, true);
+
+        await globalRenderer.render();
+    }
+}
+
 const toys: SandboxToy[] = [
     new FillAndClearToy(),
     new BouncingBallToy(),
     new FallingPixelsToy(),
     new FoodChasingSnakeToy(),
     new SpinningCubeToy(),
+    new TetrisAutoplayToy(),
 ];
 
 let activeToy: SandboxToy | null = null;
