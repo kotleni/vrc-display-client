@@ -90,8 +90,90 @@ class FillAndClearToy implements SandboxToy {
     }
 }
 
+class BouncingBallToy implements SandboxToy {
+    renderer: DisplayRenderer = new DisplayRendererImpl(); // Or your actual implementation
+
+    id: string = "bouncing-ball";
+    name: string = "Bouncing Ball";
+    updateDelay: number = 150;
+
+    private isRunning: boolean = false;
+
+    private ballX: number = 0;
+    private ballY: number = 0;
+    private velocityX: number = 1;
+    private velocityY: number = 1;
+
+    private displayWidth: number = -1;
+    private displayHeight: number = -1;
+
+    async onStart(): Promise<void> {
+        this.displayWidth = await this.renderer.getWidth();
+        this.displayHeight = await this.renderer.getHeight();
+
+        await this.renderer.clear();
+
+        // Initial position
+        this.ballX = Math.floor(this.displayWidth / 2) + 2;
+        this.ballY = Math.floor(this.displayHeight / 2);
+
+        // Initial velocity
+        this.velocityX = Math.random() < 0.5 ? 1 : -1;
+        this.velocityY = Math.random() < 0.5 ? 1 : -1;
+
+        this.isRunning = true;
+    }
+
+    async onStop(): Promise<void> {
+        this.isRunning = false;
+    }
+
+    async onUpdate(): Promise<void> {
+        if (!this.isRunning) {
+            return;
+        }
+
+        // 1. Clear current ball position
+        await this.renderer.setPixel(this.ballX, this.ballY, false);
+
+        // 2. Calculate next position
+        let nextX = this.ballX + this.velocityX;
+        let nextY = this.ballY + this.velocityY;
+
+        // 3. Collision detection and response
+        // Horizontal bounce
+        if (nextX < 0) {
+            nextX = 0; // Place ball on the boundary
+            this.velocityX *= -1; // Reverse direction
+        } else if (nextX >= this.displayWidth) {
+            nextX = this.displayWidth - 1; // Place ball on the boundary
+            this.velocityX *= -1; // Reverse direction
+        }
+
+        // Vertical bounce
+        if (nextY < 0) {
+            nextY = 0; // Place ball on the boundary
+            this.velocityY *= -1; // Reverse direction
+        } else if (nextY >= this.displayHeight) {
+            nextY = this.displayHeight - 1; // Place ball on the boundary
+            this.velocityY *= -1; // Reverse direction
+        }
+
+        // Update ball position
+        this.ballX = nextX;
+        this.ballY = nextY;
+
+        // 4. Draw ball at new position
+        await this.renderer.setPixel(this.ballX, this.ballY, true);
+
+        // 5. Render the display
+        await this.renderer.render();
+    }
+}
+
 const toys: SandboxToy[] = [
-    new FillAndClearToy()
+    new FillAndClearToy(),
+    new BouncingBallToy()
 ];
 
 let activeToy: SandboxToy | null = null;
