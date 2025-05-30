@@ -617,7 +617,7 @@ class TetrisAutoplayToy implements SandboxToy {
 
     private isRunning: boolean = false;
 
-    private readonly BOARD_WIDTH = 10;
+    private readonly BOARD_WIDTH = 15;
     private readonly BOARD_HEIGHT = 15; // Display is 15x15, use full height
 
     private board: boolean[][] = [];
@@ -646,8 +646,8 @@ class TetrisAutoplayToy implements SandboxToy {
     private gameTickCounter: number = 0;
     private readonly TICKS_PER_AUTO_DROP = 3; // Piece drops naturally every N ticks if no AI action
 
-    // Display offsets if Tetris board is smaller than display (here, width is smaller)
-    private readonly offsetX = Math.floor((15 - this.BOARD_WIDTH) / 2);
+    // No offset needed as we're using full width and height
+    private readonly offsetX = 0;
     private readonly offsetY = 0;
 
 
@@ -942,6 +942,9 @@ class TetrisAutoplayToy implements SandboxToy {
 
     async onStop(): Promise<void> {
         this.isRunning = false;
+        // Clear the display when stopping
+        await globalRenderer.clear();
+        await globalRenderer.render();
     }
 
     async onUpdate(): Promise<void> {
