@@ -34,6 +34,7 @@ class DisplayRendererImpl implements DisplayRenderer {
     }
 
     async clear(): Promise<void> {
+        pixelGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
         await resetAllPixelsInGame();
     }
 
@@ -61,6 +62,7 @@ export function updatePixelGrid(newGrid: boolean[][]) {
 export async function resetAllPixelsInGame() {
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
+            await globalRenderer.setPixel(x, y, false);
             sendSinglePixelDataToVRChat(x, y, false);
             await new Promise(resolve => setTimeout(resolve, 10));
         }
