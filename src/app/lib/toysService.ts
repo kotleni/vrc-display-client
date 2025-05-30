@@ -110,8 +110,8 @@ class BouncingBallToy implements SandboxToy {
         await this.renderer.clear();
 
         // Initial position
-        this.ballX = Math.floor(this.displayWidth / 2) + 2;
-        this.ballY = Math.floor(this.displayHeight / 2);
+        this.ballX = Math.floor(Math.random() * this.displayWidth);
+        this.ballY = Math.floor(Math.random() * this.displayHeight);
 
         // Initial velocity
         this.velocityX = Math.random() < 0.5 ? 1 : -1;
@@ -140,19 +140,35 @@ class BouncingBallToy implements SandboxToy {
         // Horizontal bounce
         if (nextX < 0) {
             nextX = 0; // Place ball on the boundary
-            this.velocityX *= -1; // Reverse direction
+            this.velocityX *= -1; // Reverse horizontal direction
+            // Chance to change vertical velocity
+            if (Math.random() < (1/26)) {
+                this.velocityY = Math.random() < 0.5 ? 1 : -1;
+            }
         } else if (nextX >= this.displayWidth) {
             nextX = this.displayWidth - 1; // Place ball on the boundary
-            this.velocityX *= -1; // Reverse direction
+            this.velocityX *= -1; // Reverse horizontal direction
+            // Chance to change vertical velocity
+            if (Math.random() < (1/26)) {
+                this.velocityY = Math.random() < 0.5 ? 1 : -1;
+            }
         }
 
         // Vertical bounce
         if (nextY < 0) {
             nextY = 0; // Place ball on the boundary
-            this.velocityY *= -1; // Reverse direction
+            this.velocityY *= -1; // Reverse vertical direction
+            // Chance to change horizontal velocity
+            if (Math.random() < (1/26)) {
+                this.velocityX = Math.random() < 0.5 ? 1 : -1;
+            }
         } else if (nextY >= this.displayHeight) {
             nextY = this.displayHeight - 1; // Place ball on the boundary
-            this.velocityY *= -1; // Reverse direction
+            this.velocityY *= -1; // Reverse vertical direction
+            // Chance to change horizontal velocity
+            if (Math.random() < (1/26)) {
+                this.velocityX = Math.random() < 0.5 ? 1 : -1;
+            }
         }
 
         // Update ball position
