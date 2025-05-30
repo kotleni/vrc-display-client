@@ -12,6 +12,46 @@ export let animationInterval: NodeJS.Timeout | null = null;
 export let currentAnimationFrames: boolean[][][] = [];
 export let currentAnimationFrameIndex: number = 0;
 
+export interface DisplayRenderer {
+    getWidth: () => Promise<number>;
+    getHeight: () => Promise<number>;
+
+    clear: () => Promise<void>;
+    setPixel: (x: number, y: number, value: boolean) => Promise<void>;
+    getPixel: (x: number, y: number) => Promise<boolean>;
+    render: () => Promise<void>;
+}
+
+class DisplayRendererImpl implements DisplayRenderer {
+    private pixelGrid: boolean[][] = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+
+    async getWidth(): Promise<number> {
+        return GRID_SIZE;
+    }
+
+    async getHeight(): Promise<number> {
+        return GRID_SIZE;
+    }
+
+    async clear(): Promise<void> {
+        await resetAllPixelsInGame();
+    }
+
+    async render(): Promise<void> {
+        await updatePixelGridInGame(this.pixelGrid);
+    }
+
+    async setPixel(x: number, y: number, value: boolean): Promise<void> {
+        this.pixelGrid[y][x] = value;
+    }
+
+    async getPixel(x: number, y: number): Promise<boolean> {
+        return this.pixelGrid[y][x];
+    }
+}
+
+export const globalRenderer: DisplayRenderer = new DisplayRendererImpl();
+
 export function updatePixelGrid(newGrid: boolean[][]) {
     if (newGrid && newGrid.length === GRID_SIZE && newGrid.every(row => Array.isArray(row) && row.length === GRID_SIZE)) {
         pixelGrid = newGrid;

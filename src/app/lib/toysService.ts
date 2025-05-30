@@ -1,7 +1,12 @@
 import {GRID_SIZE} from "@/app/lib/font";
-import {resetAllPixelsInGame, updatePixelGrid, updatePixelGridInGame} from "@/app/lib/serverState";
+import {
+    DisplayRenderer,
+    globalRenderer,
+    resetAllPixelsInGame,
+    updatePixelGrid,
+    updatePixelGridInGame
+} from "@/app/lib/serverState";
 import { clearTimeout } from "timers";
-import {sendPixelDataToVRChat} from "@/app/lib/oscService"; // Changed from clearInterval
 
 export interface SandboxToyMeta {
     id: string;
@@ -17,46 +22,8 @@ export interface SandboxToy {
     onUpdate: () => Promise<void>;
 }
 
-interface DisplayRenderer {
-    getWidth: () => Promise<number>;
-    getHeight: () => Promise<number>;
-
-    clear: () => Promise<void>;
-    setPixel: (x: number, y: number, value: boolean) => Promise<void>;
-    getPixel: (x: number, y: number) => Promise<boolean>;
-    render: () => Promise<void>;
-}
-
-class DisplayRendererImpl implements DisplayRenderer {
-    private pixelGrid: boolean[][] = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
-
-    async getWidth(): Promise<number> {
-        return GRID_SIZE;
-    }
-
-    async getHeight(): Promise<number> {
-        return GRID_SIZE;
-    }
-
-    async clear(): Promise<void> {
-        resetAllPixelsInGame();
-    }
-
-    async render(): Promise<void> {
-        updatePixelGridInGame(this.pixelGrid);
-    }
-
-    async setPixel(x: number, y: number, value: boolean): Promise<void> {
-        this.pixelGrid[y][x] = value;
-    }
-
-    async getPixel(x: number, y: number): Promise<boolean> {
-        return this.pixelGrid[y][x];
-    }
-}
-
 class FillAndClearToy implements SandboxToy {
-    renderer: DisplayRenderer = new DisplayRendererImpl();
+    renderer: DisplayRenderer = globalRenderer;
 
     id: string = "fill-and-clear";
     name: string = "Fill and Clear";
@@ -87,7 +54,7 @@ class FillAndClearToy implements SandboxToy {
 }
 
 class BouncingBallToy implements SandboxToy {
-    renderer: DisplayRenderer = new DisplayRendererImpl(); // Or your actual implementation
+    renderer: DisplayRenderer = globalRenderer;
 
     id: string = "bouncing-ball";
     name: string = "Bouncing Ball";
@@ -184,7 +151,7 @@ class BouncingBallToy implements SandboxToy {
 }
 
 class FallingPixelsToy implements SandboxToy {
-    renderer: DisplayRenderer = new DisplayRendererImpl();
+    renderer: DisplayRenderer = globalRenderer;
     id: string = "falling-pixels";
     name: string = "Falling Pixels";
     updateDelay: number = 100;
@@ -279,7 +246,7 @@ class FallingPixelsToy implements SandboxToy {
 }
 
 class FoodChasingSnakeToy implements SandboxToy {
-    renderer: DisplayRenderer = new DisplayRendererImpl();
+    renderer: DisplayRenderer = globalRenderer;
 
     id: string = "food-chasing-snake";
     name: string = "Snake Chases Food";
@@ -306,20 +273,6 @@ class FoodChasingSnakeToy implements SandboxToy {
         { dx: -1, dy: 0, name: "LEFT" }   // 3: LEFT
     ];
     private currentDirectionIndex: number = 1; // Start going RIGHT
-
-    constructor(renderer?: DisplayRenderer) {
-        if (renderer) {
-            this.renderer = renderer;
-        } else {
-            // @ts-ignore - Fallback for testing if DisplayRendererImpl is globally available
-            if (typeof DisplayRendererImpl !== 'undefined') {
-                this.renderer = new (DisplayRendererImpl as any)(this.displayWidth, this.displayHeight);
-            } else {
-                console.warn("FoodChasingSnakeToy: Renderer not provided. Toy may not work.");
-                this.renderer = {} as DisplayRenderer;
-            }
-        }
-    }
 
     private async spawnFood(): Promise<void> {
         let newFoodX: number, newFoodY: number;
