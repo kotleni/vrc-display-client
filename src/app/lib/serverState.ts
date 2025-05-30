@@ -22,6 +22,8 @@ export interface DisplayRenderer {
     render: () => Promise<void>;
 }
 
+const SENDING_PIXEL_DATA_DELAY = 2; // ms
+
 class DisplayRendererImpl implements DisplayRenderer {
     private pixelGrid: boolean[][] = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
 
@@ -64,7 +66,7 @@ export async function resetAllPixelsInGame() {
         for (let x = 0; x < GRID_SIZE; x++) {
             await globalRenderer.setPixel(x, y, false);
             sendSinglePixelDataToVRChat(x, y, false);
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise(resolve => setTimeout(resolve, SENDING_PIXEL_DATA_DELAY));
         }
     }
 }
@@ -80,7 +82,7 @@ export async function updatePixelGridInGame(newGrid: boolean[][]) {
             if (pixelGrid[y][x] != newGrid[y][x]) {
                 pixelGrid[y][x] = newGrid[y][x];
                 sendSinglePixelDataToVRChat(x, y, newGrid[y][x]);
-                await new Promise(resolve => setTimeout(resolve, 10));
+                await new Promise(resolve => setTimeout(resolve, SENDING_PIXEL_DATA_DELAY));
             }
         }
     }
