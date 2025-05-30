@@ -18,10 +18,11 @@ export function updatePixelGrid(newGrid: boolean[][]) {
     }
 }
 
-export function resetAllPixelsInGame() {
+export async function resetAllPixelsInGame() {
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             sendSinglePixelDataToVRChat(x, y, false);
+            await new Promise(resolve => setTimeout(resolve, 10));
         }
     }
 }
@@ -31,12 +32,13 @@ export function resetAllPixelsInGame() {
  * Updates only the cells that have changed.
  * @param newGrid
  */
-export function updatePixelGridInGame(newGrid: boolean[][]) {
+export async function updatePixelGridInGame(newGrid: boolean[][]) {
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             if (pixelGrid[y][x] != newGrid[y][x]) {
                 pixelGrid[y][x] = newGrid[y][x];
                 sendSinglePixelDataToVRChat(x, y, newGrid[y][x]);
+                await new Promise(resolve => setTimeout(resolve, 10));
             }
         }
     }
