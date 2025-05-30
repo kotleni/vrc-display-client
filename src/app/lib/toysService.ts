@@ -183,9 +183,105 @@ class BouncingBallToy implements SandboxToy {
     }
 }
 
+class FallingPixelsToy implements SandboxToy {
+    renderer: DisplayRenderer = new DisplayRendererImpl();
+    id: string = "falling-pixels";
+    name: string = "Falling Pixels";
+    updateDelay: number = 100;
+
+    private isRunning: boolean = false;
+    private grid: boolean[][] = []; // Internal representation of the pixels
+    private width: number = 0;
+    private height: number = 0;
+
+    // Configuration for the simulation
+    private spawnProbability: number = 0.2;
+
+    async onStart(): Promise<void> {
+        this.isRunning = true;
+        this.width = await this.renderer.getWidth();
+        this.height = await this.renderer.getHeight();
+
+        // Initialize internal grid
+        this.grid = Array(this.height).fill(null).map(() => Array(this.width).fill(false));
+
+        await this.renderer.clear();
+        await this.renderer.render();
+    }
+
+    async onStop(): Promise<void> {
+        this.isRunning = false;
+    }
+
+    async onUpdate(): Promise<void> {
+        if (!this.isRunning) return;
+
+        // 0. Check if all pixels are filled
+        var isAllFilled = true;
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                if (!this.grid[y][x]) {
+                    isAllFilled = false;
+                }
+            }
+        }
+
+        if(isAllFilled) {
+            this.grid = Array(this.height).fill(null).map(() => Array(this.width).fill(false));
+            await this.renderer.clear();
+            await this.renderer.render();
+        }
+
+        const nextGrid = Array(this.height).fill(null).map(() => Array(this.width).fill(false));
+
+        // 1. Simulate gravity and collisions
+        // Iterate from bottom-up to correctly handle pixels stacking
+        for (let y = this.height - 1; y >= 0; y--) {
+            for (let x = 0; x < this.width; x++) {
+                if (this.grid[y][x]) { // If there's a pixel here
+                    if (y + 1 < this.height && !this.grid[y + 1][x]) {
+                        // Space below is empty and within bounds, so it falls
+                        nextGrid[y + 1][x] = true;
+                    } else {
+                        // It's at the bottom or blocked by another pixel, so it stays
+                        nextGrid[y][x] = true;
+                    }
+                }
+
+                if(!this.isRunning) return;
+            }
+        }
+
+        // Update the internal grid with the result of falling/staying pixels
+        this.grid = nextGrid;
+
+        // 2. Spawn new pixels at the top row
+        for (let x = 0; x < this.width; x++) {
+            // Only spawn if the top cell is currently empty *after* potential falls from above (which is impossible for row 0)
+            // and based on probability
+            if (!this.grid[0][x] && Math.random() < this.spawnProbability) {
+                this.grid[0][x] = true;
+            }
+
+            if(!this.isRunning) return;
+        }
+
+        // 3. Update the display renderer
+        // It's more efficient to set all pixels and then render once.
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                await this.renderer.setPixel(x, y, this.grid[y][x]);
+                if(!this.isRunning) return;
+            }
+        }
+        await this.renderer.render();
+    }
+}
+
 const toys: SandboxToy[] = [
     new FillAndClearToy(),
-    new BouncingBallToy()
+    new BouncingBallToy(),
+    new FallingPixelsToy()
 ];
 
 let activeToy: SandboxToy | null = null;
