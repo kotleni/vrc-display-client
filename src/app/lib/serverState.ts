@@ -18,6 +18,14 @@ export function updatePixelGrid(newGrid: boolean[][]) {
     }
 }
 
+export function resetAllPixelsInGame() {
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            sendSinglePixelDataToVRChat(x, y, false);
+        }
+    }
+}
+
 /**
  * Smart update of the pixel grid in VRChat.
  * Updates only the cells that have changed.

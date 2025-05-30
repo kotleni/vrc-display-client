@@ -1,5 +1,5 @@
 import {GRID_SIZE} from "@/app/lib/font";
-import {updatePixelGrid, updatePixelGridInGame} from "@/app/lib/serverState";
+import {resetAllPixelsInGame, updatePixelGrid, updatePixelGridInGame} from "@/app/lib/serverState";
 import { clearTimeout } from "timers";
 import {sendPixelDataToVRChat} from "@/app/lib/oscService"; // Changed from clearInterval
 
@@ -39,11 +39,7 @@ class DisplayRendererImpl implements DisplayRenderer {
     }
 
     async clear(): Promise<void> {
-        for(let y = 0; y < await this.getHeight(); y++) {
-            for(let x = 0; x < await this.getWidth(); x++) {
-                await this.setPixel(x, y, false);
-            }
-        }
+        resetAllPixelsInGame();
     }
 
     async render(): Promise<void> {
