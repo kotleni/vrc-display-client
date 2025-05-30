@@ -278,10 +278,241 @@ class FallingPixelsToy implements SandboxToy {
     }
 }
 
+class FoodChasingSnakeToy implements SandboxToy {
+    renderer: DisplayRenderer = new DisplayRendererImpl();
+
+    id: string = "food-chasing-snake";
+    name: string = "Snake Chases Food";
+    updateDelay: number = 180; // Milliseconds, adjust for snake speed
+
+    private isRunning: boolean = false;
+    private readonly displayWidth: number = 15;
+    private readonly displayHeight: number = 15;
+
+    private snakeBody: Array<[number, number]> = [];
+    private readonly initialLength: number = 3;
+    private snakeGrowthPending: number = 0;
+
+    private foodX: number = -1;
+    private foodY: number = -1;
+    private foodVisible: boolean = true;
+    private foodBlinkToggleCounter: number = 0;
+    private readonly FOOD_BLINK_FRAMES: number = 3; // Food blinks every N frames (N on, N off approx)
+
+    private readonly dirDeltas = [
+        { dx: 0, dy: -1, name: "UP" },    // 0: UP
+        { dx: 1, dy: 0,  name: "RIGHT" }, // 1: RIGHT
+        { dx: 0, dy: 1,  name: "DOWN" },  // 2: DOWN
+        { dx: -1, dy: 0, name: "LEFT" }   // 3: LEFT
+    ];
+    private currentDirectionIndex: number = 1; // Start going RIGHT
+
+    constructor(renderer?: DisplayRenderer) {
+        if (renderer) {
+            this.renderer = renderer;
+        } else {
+            // @ts-ignore - Fallback for testing if DisplayRendererImpl is globally available
+            if (typeof DisplayRendererImpl !== 'undefined') {
+                this.renderer = new (DisplayRendererImpl as any)(this.displayWidth, this.displayHeight);
+            } else {
+                console.warn("FoodChasingSnakeToy: Renderer not provided. Toy may not work.");
+                this.renderer = {} as DisplayRenderer;
+            }
+        }
+    }
+
+    private async spawnFood(): Promise<void> {
+        let newFoodX: number, newFoodY: number;
+        let attempts = 0;
+        const maxAttempts = this.displayWidth * this.displayHeight;
+
+        do {
+            newFoodX = Math.floor(Math.random() * this.displayWidth);
+            newFoodY = Math.floor(Math.random() * this.displayHeight);
+            attempts++;
+            if (attempts > maxAttempts && this.snakeBody.length < maxAttempts) { // Avoid infinite loop if screen is almost full
+                console.warn("Could not find empty spot for food easily.");
+                // Fallback: just pick a random spot, might overlap if unlucky
+                break;
+            }
+        } while (this.snakeBody.some(seg => seg[0] === newFoodX && seg[1] === newFoodY) && attempts <= maxAttempts);
+
+        // If old food existed and was visible, turn it off before moving
+        if (this.foodX !== -1 && this.foodY !== -1 && this.foodVisible) {
+            await this.renderer.setPixel(this.foodX, this.foodY, false);
+        }
+
+        this.foodX = newFoodX;
+        this.foodY = newFoodY;
+        this.foodVisible = true;
+        this.foodBlinkToggleCounter = this.FOOD_BLINK_FRAMES;
+        if (this.foodX !== -1 && this.foodY !== -1) { // Ensure valid coordinates
+            await this.renderer.setPixel(this.foodX, this.foodY, this.foodVisible);
+        }
+    }
+
+    async onStart(): Promise<void> {
+        this.isRunning = true;
+        this.snakeGrowthPending = 0;
+        await this.renderer.clear();
+
+        this.snakeBody = [];
+        this.currentDirectionIndex = 1; // Start Right
+
+        const startX = Math.floor(this.displayWidth / 3); // Start a bit off-center
+        const startY = Math.floor(this.displayHeight / 2);
+
+        for (let i = 0; i < this.initialLength; i++) {
+            this.snakeBody.push([startX - (this.initialLength - 1 - i), startY]);
+        }
+
+        for (const segment of this.snakeBody) {
+            await this.renderer.setPixel(segment[0], segment[1], true);
+        }
+
+        await this.spawnFood();
+        await this.renderer.render();
+    }
+
+    async onStop(): Promise<void> {
+        this.isRunning = false;
+    }
+
+    private chooseDirection(): void {
+        if (this.foodX === -1 || this.snakeBody.length === 0) return; // No food or no snake
+
+        const head = this.snakeBody[this.snakeBody.length - 1];
+
+        const potentialDirections = [
+            this.currentDirectionIndex, // Straight
+            (this.currentDirectionIndex + 1 + 4) % 4, // Turn Right
+            (this.currentDirectionIndex - 1 + 4) % 4  // Turn Left
+        ];
+
+        let bestDirection = this.currentDirectionIndex;
+        let minDistance = Infinity;
+
+        for (const dirIndex of potentialDirections) {
+            const delta = this.dirDeltas[dirIndex];
+            const nextHeadX = (head[0] + delta.dx + this.displayWidth) % this.displayWidth;
+            const nextHeadY = (head[1] + delta.dy + this.displayHeight) % this.displayHeight;
+
+            // Simple distance: Manhattan distance
+            const distance = Math.abs(nextHeadX - this.foodX) + Math.abs(nextHeadY - this.foodY);
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                bestDirection = dirIndex;
+            }
+            // Basic tie-breaking: prefer straight, then right turn, then left turn
+            else if (distance === minDistance) {
+                if (dirIndex === this.currentDirectionIndex) { // Prefer going straight
+                    bestDirection = dirIndex;
+                } else if (bestDirection !== this.currentDirectionIndex && dirIndex === (this.currentDirectionIndex + 1 + 4) % 4) {
+                    // If current best is not straight, prefer right turn over left
+                    bestDirection = dirIndex;
+                }
+            }
+        }
+        this.currentDirectionIndex = bestDirection;
+    }
+
+    private async handleFoodBlinking(): Promise<void> {
+        if (this.foodX === -1 || !this.renderer.setPixel) return;
+
+        this.foodBlinkToggleCounter--;
+        if (this.foodBlinkToggleCounter <= 0) {
+            this.foodVisible = !this.foodVisible;
+            this.foodBlinkToggleCounter = this.FOOD_BLINK_FRAMES;
+            // Only update if food hasn't been "eaten" in the same frame by snake moving onto it
+            // The snake drawing logic will handle drawing food if it's visible and snake head is not on it
+            // And if snake head *is* on it, it's "eaten".
+            // This ensures the food pixel reflects its current blink state IF it's not where the snake head just moved.
+            const head = this.snakeBody[this.snakeBody.length - 1];
+            if (!(head[0] === this.foodX && head[1] === this.foodY)) {
+                await this.renderer.setPixel(this.foodX, this.foodY, this.foodVisible);
+            }
+        }
+    }
+
+    async onUpdate(): Promise<void> {
+        if (!this.isRunning || !this.renderer.setPixel || this.snakeBody.length === 0) {
+            return;
+        }
+
+        await this.handleFoodBlinking();
+        this.chooseDirection();
+
+        const head = this.snakeBody[this.snakeBody.length - 1];
+        const delta = this.dirDeltas[this.currentDirectionIndex];
+
+        let newHeadX = (head[0] + delta.dx + this.displayWidth) % this.displayWidth;
+        let newHeadY = (head[1] + delta.dy + this.displayHeight) % this.displayHeight;
+
+        // Check for self-collision
+        for (let i = 0; i < this.snakeBody.length -1; i++) { // Don't check against current head's old position before move
+            const segment = this.snakeBody[i];
+            if (segment[0] === newHeadX && segment[1] === newHeadY) {
+                // Self-collision! Reset the game.
+                await this.onStart();
+                return; // Exit current onUpdate
+            }
+        }
+
+        // Check for food collision
+        let ateFood = false;
+        if (newHeadX === this.foodX && newHeadY === this.foodY) {
+            ateFood = true;
+            this.snakeGrowthPending += 1; // Grow by 1 segment
+            // Turn off current food pixel explicitly because spawnFood might take time
+            // or the blinking logic might turn it back on before render if unlucky timing.
+            if (this.foodX !== -1 && this.foodY !== -1) {
+                await this.renderer.setPixel(this.foodX, this.foodY, false);
+            }
+            await this.spawnFood(); // New food will be drawn by spawnFood
+        }
+
+        // Add new head
+        this.snakeBody.push([newHeadX, newHeadY]);
+        await this.renderer.setPixel(newHeadX, newHeadY, true);
+
+        // Handle tail / growth
+        if (this.snakeGrowthPending > 0) {
+            this.snakeGrowthPending--;
+        } else {
+            const removedTail = this.snakeBody.shift();
+            if (removedTail) {
+                // Ensure the removed tail pixel is actually turned off,
+                // unless the new head (or food) is now there.
+                // This check is mostly redundant if self-collision reset works,
+                // but good for safety.
+                let stillOccupied = false;
+                if (newHeadX === removedTail[0] && newHeadY === removedTail[1]) stillOccupied = true;
+                if (this.foodX === removedTail[0] && this.foodY === removedTail[1] && this.foodVisible) stillOccupied = true;
+
+                if (!stillOccupied) {
+                    await this.renderer.setPixel(removedTail[0], removedTail[1], false);
+                }
+            }
+        }
+
+        // Ensure food is correctly visible if not eaten and not under the head
+        // (This is a bit of a catch-all for blinking edge cases with movement)
+        if (!ateFood && this.foodX !== -1 && this.foodY !== -1 &&
+            !(newHeadX === this.foodX && newHeadY === this.foodY)) {
+            await this.renderer.setPixel(this.foodX, this.foodY, this.foodVisible);
+        }
+
+
+        await this.renderer.render();
+    }
+}
+
 const toys: SandboxToy[] = [
     new FillAndClearToy(),
     new BouncingBallToy(),
-    new FallingPixelsToy()
+    new FallingPixelsToy(),
+    new FoodChasingSnakeToy(),
 ];
 
 let activeToy: SandboxToy | null = null;
