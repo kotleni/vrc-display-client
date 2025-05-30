@@ -81,7 +81,7 @@ export default function HomePage() {
       </div>
       <DrawingPresetsManager currentGrid={pixelGrid} onPresetLoad={(loadedGrid) => { handleStopAllAutomations(true); setPixelGrid(loadedGrid); handleGridChange(loadedGrid); }} displayStatus={(msg, isErr) => displayStatus(setStatusDraw, msg, isErr)} onInteraction={() => handleStopAllAutomations(true)} />
       <ScrollTextManager onStartScroll={() => handleAutomationStart('scroll')} onStopScroll={() => handleStopAllAutomations(true)} displayStatus={(msg, isErr) => displayStatus(setStatusDraw, msg, isErr)} />
-      <AnimationManager initialFrames={pixelGrid} gridSize={GRID_SIZE} onPlayAnimation={async (frames, delay) => { await handleAutomationStart('animation');}} onStopAnimation={() => handleStopAllAutomations(true)} onLoadAnimationFrames={(frames) => {setPixelGrid(frames[0] || Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false)));}} displayStatus={(msg, isErr) => displayStatus(setStatusDraw, msg, isErr)} />
+      {/*<AnimationManager initialFrames={pixelGrid} gridSize={GRID_SIZE} onPlayAnimation={async (frames, delay) => { await handleAutomationStart('animation');}} onStopAnimation={() => handleStopAllAutomations(true)} onLoadAnimationFrames={(frames) => {setPixelGrid(frames[0] || Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false)));}} displayStatus={(msg, isErr) => displayStatus(setStatusDraw, msg, isErr)} />*/}
     </main>
   );
 }
