@@ -1,4 +1,5 @@
-import { GRID_SIZE } from './font'; // Assuming GRID_SIZE will be defined there or centrally
+import { GRID_SIZE } from './font';
+import {sendPixelDataToVRChat, sendSinglePixelDataToVRChat} from "@/app/lib/oscService"; // Assuming GRID_SIZE will be defined there or centrally
 
 export let pixelGrid: boolean[][] = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
 
@@ -14,6 +15,22 @@ export let currentAnimationFrameIndex: number = 0;
 export function updatePixelGrid(newGrid: boolean[][]) {
     if (newGrid && newGrid.length === GRID_SIZE && newGrid.every(row => Array.isArray(row) && row.length === GRID_SIZE)) {
         pixelGrid = newGrid;
+    }
+}
+
+/**
+ * Smart update of the pixel grid in VRChat.
+ * Updates only the cells that have changed.
+ * @param newGrid
+ */
+export function updatePixelGridInGame(newGrid: boolean[][]) {
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (pixelGrid[y][x] != newGrid[y][x]) {
+                pixelGrid[y][x] = newGrid[y][x];
+                sendSinglePixelDataToVRChat(x, y, newGrid[y][x]);
+            }
+        }
     }
 }
 

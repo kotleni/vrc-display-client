@@ -25,6 +25,15 @@ export function sendPixelDataToVRChat(gridData: boolean[][]): void {
     }
 }
 
+export function sendSinglePixelDataToVRChat(x: number, y: number, value: boolean): void {
+    const address = `/avatar/parameters/Pixel_${y}_${x}`;
+    try {
+        oscClient.send(address, value);
+    } catch (e) {
+        console.error(`Error sending OSC message for ${address}: ${e}`);
+    }
+}
+
 // Graceful shutdown for OSC client (optional, as Next.js dev server restarts might not trigger this well)
 // process.on('SIGINT', () => {
 //     console.log("Closing OSC client due to SIGINT.");

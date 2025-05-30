@@ -6,6 +6,7 @@ import DrawingPresetsManager from './components/DrawingPresetsManager';
 import ScrollTextManager from './components/ScrollTextManager';
 import AnimationManager from './components/AnimationManager';
 import { GRID_SIZE } from './lib/font';
+import SandboxesManager from "@/app/components/SandboxesManager";
 
 export default function HomePage() {
   const [pixelGrid, setPixelGrid] = useState<boolean[][]>(Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false)));
@@ -81,6 +82,7 @@ export default function HomePage() {
       </div>
       <DrawingPresetsManager currentGrid={pixelGrid} onPresetLoad={(loadedGrid) => { handleStopAllAutomations(true); setPixelGrid(loadedGrid); handleGridChange(loadedGrid); }} displayStatus={(msg, isErr) => displayStatus(setStatusDraw, msg, isErr)} onInteraction={() => handleStopAllAutomations(true)} />
       <ScrollTextManager onStartScroll={() => handleAutomationStart('scroll')} onStopScroll={() => handleStopAllAutomations(true)} displayStatus={(msg, isErr) => displayStatus(setStatusDraw, msg, isErr)} />
+      <SandboxesManager onStartPlaying={() => {}} onStopPlaying={() => {}} displayStatus={(msg, isErr) => displayStatus(setStatusDraw, msg, isErr)} />
       {/*<AnimationManager initialFrames={pixelGrid} gridSize={GRID_SIZE} onPlayAnimation={async (frames, delay) => { await handleAutomationStart('animation');}} onStopAnimation={() => handleStopAllAutomations(true)} onLoadAnimationFrames={(frames) => {setPixelGrid(frames[0] || Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false)));}} displayStatus={(msg, isErr) => displayStatus(setStatusDraw, msg, isErr)} />*/}
     </main>
   );
